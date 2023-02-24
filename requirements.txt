@@ -1,0 +1,14 @@
+wget==3.2
+fonttools==4.38.0
+opentypesvg==1.1.5
+xmltodict==0.13.0
+numpy==1.24.1
+matplotlib==3.6.3
+pandas==1.5.3
+tqdm==4.64.1
+scikit-learn==1.2.1
+torchsummary==1.5.1
+reportlab==3.6.12
+svglib==1.5.1
+# torch==1.13.1
+# torchvision==0.14.1
