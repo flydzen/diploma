@@ -7,3 +7,7 @@ utils/__pycache__
 utils/1.svg
 utils/2.svg
 utils/svg_old.py
+.ipynb_checkpoints/
+__pycache__/
+imgs/
+models_ae/

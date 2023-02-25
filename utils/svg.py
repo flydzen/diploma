@@ -175,7 +175,7 @@ class SVG:
         return SVG(commands, file=file)
 
     def dump(self):
-        view_box = ' '.join(map(str, self.view_box)) if self.view_box else (0, 0, 1000, 1000)
+        view_box = ' '.join(map(str, self.view_box)) if self.view_box else (0, 0, 1, 1)
         commands = []
         for command in self.commands:
             commands.append([str(command[0])] + [np.format_float_positional(i, precision=8, trim='-') for i in command[1:]])
@@ -185,7 +185,7 @@ class SVG:
                f'{path}\n' \
                f'    "/>\n' \
                f'</svg>\n'
-
+    
     def dump_to_file(self, file: Path = None):
         file = file or self.file
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -253,6 +253,12 @@ class SVG:
         svg = SVG(commands, view_box=(0, 0, 1, 1), file=path)
         svg.relative = True
         return svg
+    
+    def mulsize(self, x):
+        for command in self.commands:
+            for v in range(1, len(command)):
+                command[v] *= x
+        self.view_box = (0, 0, self.view_box[2] * x, self.view_box[3] * x) 
 
     def prepare(self):
         self.simplify()
