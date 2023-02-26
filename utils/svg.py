@@ -6,9 +6,6 @@ import numpy as np
 import xmltodict
 
 
-COMMANDS = 'lcp'
-
-
 class EncodeError(Exception):
     pass
 
@@ -202,22 +199,3 @@ class SVG:
     def prepare(self):
         self.simplify()
         self.normalize()
-
-
-if __name__ == '__main__':
-    svg = SVG.load(Path('../data/svg/!paulmaul/o.svg'))
-
-    svg.prepare()
-
-    svg.dump_to_file(Path('1.svg'))
-
-    encoded = svg.encode()
-    decoded = SVG.decode(encoded)
-
-    decoded.dump_to_file(Path('2.svg'))
-
-#     # svg = SVG.load(Path('../data/svg/dafonts/!sketchytimes/six.svg'))
-#     svg.simplify()
-#     svg.normalize()
-#     print(svg.encode())
-#     svg.dump_to_file(Path('../testing.svg'))
