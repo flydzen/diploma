@@ -79,74 +79,17 @@ class SVG:
             new_commands.append(new_arg)
         self.view_box = (min_x, min_y, max_x - min_x, max_y - min_y)
         self.commands = new_commands
-        self.relative = False
-
-    def to_relative(self):
-        def shift(arguments):
-            nonlocal last
-            last[0] += arguments[-2]
-            last[1] += arguments[-1]
-
-        assert self.relative is False
-
-        new_commands = []
-        start = [0, 0]
-        last = [0, 0]
-        for command in self.commands:
-            match command:
-                case 'M' as q, x, y:  # move
-                    new_arg = [q.lower(), x - last[0], y - last[1]]
-                    last = [x, y]
-                    start = last.copy()
-                case 'L' as q, x, y:  # line
-                    new_arg = [q.lower(), x - last[0], y - last[1]]
-                    last = [x, y]
-                case 'C', *arg:  # cubic curve
-                    new_arg = ['c', *[arg[i] - last[i % 2] for i in range(6)]]
-                    shift(new_arg)
-                case 'Z' | 'z',:
-                    new_arg = ['z']
-                    last = start.copy()
-                case _ as unsupported:
-                    raise Exception(f'Unsupported command {unsupported}')
-            new_commands.append(new_arg)
-        self.commands = new_commands
-        self.relative = True
 
     def normalize(self):
         assert self.view_box is not None
-        if self.relative is False:
-            for c in self.commands:
-                for i, ch in enumerate(c[1:]):
-                    c[i + 1] = ch - self.view_box[i % 2]
+        for c in self.commands:
+            for i, ch in enumerate(c[1:]):
+                c[i + 1] = ch - self.view_box[i % 2]
 
-            scale = max(self.view_box[2:])
-            for command in self.commands:
-                for i, v in enumerate(command[1:], start=1):
-                    command[i] = v / scale
-        elif self.relative is True:
-            x_max, x_min, y_max, y_min = float('-inf'), float('inf'), float('-inf'), float('inf')
-            last = self.commands[0][-2:]
-            start = last
-            for c in self.commands[1:]:
-                if c[0] == 'z':
-                    last = start
-                    continue
-                min_x = min(min_x, last[0])
-                min_y = min(min_y, last[1])
-                max_x = max(max_x, last[0])
-                max_y = max(max_y, last[1])
-                last[0] += c[-2]
-                last[1] += c[-1]
-                if c[0] == 'm':
-                    start = last
-            scale = max(x_max - x_min, y_max - y_min)
-            
-            self.commands[0][-2] -= x_min
-            self.commands[0][-1] -= y_min
-            for c in self.commands:
-                for i in range(1, len(c)):
-                    c[i] /= scale
+        scale = max(self.view_box[2:])
+        for command in self.commands:
+            for i, v in enumerate(command[1:], start=1):
+                command[i] = v / scale
         self.view_box = (0, 0, 1, 1)
 
     @classmethod
@@ -198,10 +141,10 @@ class SVG:
 
         one_hot_match = {
             ' ': 0,
-            'm': 1,
-            'l': 2,
-            'c': 3,
-            'z': 4,
+            'M': 1,
+            'L': 2,
+            'C': 3,
+            'Z': 4,
         }
         result = []
 
@@ -212,12 +155,8 @@ class SVG:
             line = np.zeros(self.ENCODE_WIDTH, dtype=np.float32)
             args = np.array(args, dtype=np.float32)
 
-            if command == 'z':
-                last = start.copy()
-            else:
-                last += args[-2:]
-            if command == 'm':
-                start = last.copy()
+            if command == 'M':
+                start = args[-2:]
 
             assert command in one_hot_match, f'Wrong command {command}, file {self.file}'
 
@@ -234,18 +173,18 @@ class SVG:
 
     @classmethod
     def decode(cls, data, path: Path = None):
-        one_hot_match = ' mlcz'
+        one_hot_match = ' MLCZ'
         commands = []
         for row in data:
             command = one_hot_match[np.argmax(row[:SVG.ONE_HOT_LEN])]
             args = row[SVG.ONE_HOT_LEN:]
             line = [command]
             match command:
-                case 'm' | 'l':
+                case 'M' | 'L':
                     line.extend(args[-2:])
-                case 'z':
+                case 'Z':
                     pass
-                case 'c':
+                case 'C':
                     line.extend(args)
                 case ' ':
                     break
@@ -263,7 +202,6 @@ class SVG:
     def prepare(self):
         self.simplify()
         self.normalize()
-        self.to_relative()
 
 
 if __name__ == '__main__':
