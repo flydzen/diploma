@@ -10,6 +10,7 @@ from opentypesvg import fonts2svg
 from pathlib import Path
 import random
 import pandas as pd
+from typing import List
 
 
 from utils.svg import SVG
@@ -87,7 +88,7 @@ def ttf_dir_to_svg(directory: Path, filters=None, size=None) -> None:
     print()
 
 
-def fonts_filter(font_directory: Path, filters=None) -> list[Path]:
+def fonts_filter(font_directory: Path, filters=None) -> List[Path]:
     filters = filters or GLYPH_FILTER
     filter_svg = [f'{i}.svg' for i in filters]
     matched = []

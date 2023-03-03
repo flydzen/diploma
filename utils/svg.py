@@ -13,7 +13,7 @@ class EncodeError(Exception):
 class SVG:
     OFFSET = 0.05
     ONE_HOT_LEN = 5
-    ENCODE_HEIGHT = 64
+    ENCODE_HEIGHT = 80
     ENCODE_WIDTH = ONE_HOT_LEN + 6
     ENCODE_SHAPE = (ENCODE_WIDTH, ENCODE_HEIGHT)
 
@@ -29,46 +29,28 @@ class SVG:
         new_commands = []
         last = [0, 0]
         for command in self.commands:
-            match command:
-                case 'M' | 'L' | 'C' as q, *args:
-                    new_arg = [q, *args]
-                    last = args[-2:]
-                case 'm' | 'l' as q, x, y:  # move | line
-                    last[0] += x
-                    last[1] += y
-                    new_arg = [q.upper(), *last]
-                case 'H', x:  # horizontal line
-                    last[0] = x
-                    new_arg = ['L', *last]
-                case 'h', x:  # relative horizontal line
-                    last[0] += x
-                    new_arg = ['L', *last]
-                case 'V', y:  # vertical line
-                    last[1] = y
-                    new_arg = ['L', *last]
-                case 'v', y:  # relative vertical line
-                    last[1] += y
-                    new_arg = ['L', *last]
-                case 'c', *arg:  # cubic curve
-                    new_arg = ['C', *[arg[i] + last[i % 2] for i in range(6)]]
-                    last = new_arg[-2:]
-                case 'Q' | 'q' as q, px, py, x, y:  # quadratic curve, conversion to cubic
-                    if q == 'q':
-                        px += last[0]
-                        py += last[1]
-                        x += last[0]
-                        y += last[1]
-                    new_arg = [
-                        'C',
-                        last[0] + 2 / 3 * (px - last[0]), last[1] + 2 / 3 * (py - last[1]),
-                        x + 2 / 3 * (px - x), y + 2 / 3 * (py - y),
-                        x, y,
-                    ]
-                    last = [x, y]
-                case 'Z' | 'z', :
-                    new_arg = ['Z']
-                case _ as unsupported:
-                    raise Exception(f'Unsupported command {unsupported}, path: {self.file}')
+            if command[0] == 'Z':
+                new_arg = args
+            elif command[0] in ('M', 'L', 'C'):
+                new_arg = args
+                last = args[-2:]
+            elif command[0] == 'H':
+                last[0] = args[1]
+                new_args = ['L', *last]
+            elif command[0] == 'V':
+                last[1] = args[1]
+                new_args = ['L', *last]
+            elif command[0] == 'Q':
+                q, px, py, x, y = args
+                new_arg = [
+                    'C',
+                    last[0] + 2 / 3 * (px - last[0]), last[1] + 2 / 3 * (py - last[1]),
+                    x + 2 / 3 * (px - x), y + 2 / 3 * (py - y),
+                    x, y,
+                ]
+                last = [x, y]
+            else:
+                raise Exception(f'Unsupported command {args}, path: {self.file}')
             min_x = min(min_x, last[0])
             min_y = min(min_y, last[1])
             max_x = max(max_x, last[0])
@@ -176,15 +158,14 @@ class SVG:
             command = one_hot_match[np.argmax(row[:SVG.ONE_HOT_LEN])]
             args = row[SVG.ONE_HOT_LEN:]
             line = [command]
-            match command:
-                case 'M' | 'L':
-                    line.extend(args[-2:])
-                case 'Z':
-                    pass
-                case 'C':
-                    line.extend(args)
-                case ' ':
-                    break
+            if command == 'M' or command == 'L':
+                line.extend(args[-2:])
+            elif command == 'Z':
+                pass
+            elif command == 'C':
+                line.extend(args)
+            else:
+                break
             commands.append(line)
         svg = SVG(commands, view_box=(0, 0, 1, 1), file=path)
         svg.relative = True
