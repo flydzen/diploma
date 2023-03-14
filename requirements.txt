@@ -1,4 +1,4 @@
-numpy==1.21.0
+numpy>=1.21.0
 wget==3.2
 fonttools==4.38.0
 opentypesvg==1.1.5
@@ -10,5 +10,6 @@ scikit-learn==1.2.1
 torchsummary==1.5.1
 optuna==3.1.0
 cairosvg
+umap-learn>=0.5.3
 # torch==1.13.1
 # torchvision==0.14.1
