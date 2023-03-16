@@ -11,7 +11,7 @@ from pathlib import Path
 import random
 import pandas as pd
 from typing import List
-
+from tqdm import tqdm
 
 from utils.svg import SVG
 
@@ -29,8 +29,9 @@ def bar_custom(current, total, width=80):
     current += 1
     p = int(current / total * width)
     progress_message = f'\r<{"#" * p + "_" * (width - p)}>: {str(current / total * 100)[:4]}% [{current} / {total}]'
-    sys.stdout.write(progress_message)
-    sys.stdout.flush()
+    if current % 10 == 0:
+        sys.stdout.write(progress_message)
+        sys.stdout.flush()
 
 
 def download() -> None:
@@ -70,8 +71,7 @@ def ttf_to_svg(file, out_dir_suffix) -> Optional[Path]:
 def ttf_dir_to_svg(directory: Path, filters=None, size=None) -> None:
     filters = filters or GLYPH_FILTER
     items = list(directory.glob('*.ttf'))
-    for i, file in enumerate(items[:size]):
-        bar_custom(i, size or len(items))
+    for i, file in tqdm(enumerate(items[:size]), total=size or len(items)):
         font_name = file.stem
         if '.' in font_name:  # кто так называет?
             continue
@@ -121,8 +121,7 @@ def load_data(size=None):
 def get_data(size=None):
     data = []
     size = size or len(list(get_font_paths()))
-    for i, path in enumerate(islice(get_font_paths(), size)):
-        bar_custom(i, size)
+    for i, path in tqdm(enumerate(islice(get_font_paths(), size)), total=size):
         name = path.name
         for glif in path.iterdir():
             letter = glif.name.split('.')[0]

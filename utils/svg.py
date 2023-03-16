@@ -30,32 +30,39 @@ class SVG:
         last = [0, 0]
         for command in self.commands:
             if command[0] == 'Z':
-                new_arg = args
+                new_command = command
             elif command[0] in ('M', 'L', 'C'):
-                new_arg = args
-                last = args[-2:]
+                new_command = command
+                last = command[-2:]
             elif command[0] == 'H':
-                last[0] = args[1]
-                new_args = ['L', *last]
+                last[0] = command[1]
+                new_command = ['L', *last]
             elif command[0] == 'V':
-                last[1] = args[1]
-                new_args = ['L', *last]
+                last[1] = command[1]
+                new_command = ['L', *last]
             elif command[0] == 'Q':
-                q, px, py, x, y = args
-                new_arg = [
+                q, px, py, x, y = command
+                new_command = [
                     'C',
-                    last[0] + 2 / 3 * (px - last[0]), last[1] + 2 / 3 * (py - last[1]),
-                    x + 2 / 3 * (px - x), y + 2 / 3 * (py - y),
+                    last[0] + 2 / 3 * (px - last[0]), 
+                    last[1] + 2 / 3 * (py - last[1]),
+                    x + 2 / 3 * (px - x), 
+                    y + 2 / 3 * (py - y),
                     x, y,
                 ]
                 last = [x, y]
             else:
-                raise Exception(f'Unsupported command {args}, path: {self.file}')
-            min_x = min(min_x, last[0])
-            min_y = min(min_y, last[1])
-            max_x = max(max_x, last[0])
-            max_y = max(max_y, last[1])
-            new_commands.append(new_arg)
+                raise Exception(f'Unsupported command {command}, path: {self.file}')
+
+            for i, c in enumerate(new_command[1:], start=1):
+                if i % 2 == 1:  # x
+                    min_x = min(min_x, c)
+                    max_x = max(max_x, c)
+                else:  # y
+                    min_y = min(min_y, c)
+                    max_y = max(max_y, c)
+
+            new_commands.append(new_command)
         self.view_box = (min_x, min_y, max_x - min_x, max_y - min_y)
         self.commands = new_commands
 
@@ -127,15 +134,9 @@ class SVG:
         }
         result = []
 
-        start = np.array([0, 0], dtype=np.float32)
-        last = start.copy()
-
         for command, *args in self.commands:
             line = np.zeros(self.ENCODE_WIDTH, dtype=np.float32)
             args = np.array(args, dtype=np.float32)
-
-            if command == 'M':
-                start = args[-2:]
 
             assert command in one_hot_match, f'Wrong command {command}, file {self.file}'
 
