@@ -11,5 +11,6 @@ torchsummary==1.5.1
 optuna==3.1.0
 cairosvg
 umap-learn>=0.5.3
+GitPython>=3.1.31
 # torch==1.13.1
 # torchvision==0.14.1
