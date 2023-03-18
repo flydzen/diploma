@@ -20,7 +20,7 @@ class SVG:
     def __init__(self, commands: list, view_box: tuple = None, file: Path = None):
         self.file = file
         self.commands = commands
-        self.view_box = view_box
+        self.view_box = view_box or (0, 0, 1, 1)
         self.relative: Optional[bool] = None
 
     def simplify(self):
@@ -107,8 +107,10 @@ class SVG:
         view_box = ' '.join(map(str, self.view_box)) if self.view_box else (0, 0, 1, 1)
         commands = []
         for command in self.commands:
-            commands.append([str(command[0])] + [np.format_float_positional(i, precision=8, trim='-') for i in command[1:]])
-        path = '\t' + '\n\t'.join([' '.join(command) for command in commands])
+            commands.append(
+                [str(command[0])] + [np.format_float_positional(i, precision=7, trim='-') for i in command[1:]]
+            )
+        path = '\n'.join([' '.join(command) for command in commands])
         return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}">\n' \
                f'    <path fill="#000000" d="\n' \
                f'{path}\n' \
