@@ -1,7 +1,5 @@
 import itertools
 from pathlib import Path
-from typing import Optional
-
 import numpy as np
 import xmltodict
 
@@ -11,7 +9,6 @@ class EncodeError(Exception):
 
 
 class SVG:
-    OFFSET = 0.05
     ONE_HOT_LEN = 5
     ENCODE_HEIGHT = 80
     ENCODE_WIDTH = ONE_HOT_LEN + 6
@@ -21,10 +18,8 @@ class SVG:
         self.file = file
         self.commands = commands
         self.view_box = view_box or (0, 0, 1, 1)
-        self.relative: Optional[bool] = None
 
     def simplify(self):
-        assert self.relative is None
         min_x, min_y, max_x, max_y = float('inf'), float('inf'), float('-inf'), float('-inf')
         new_commands = []
         last = [0, 0]
@@ -171,7 +166,6 @@ class SVG:
                 break
             commands.append(line)
         svg = SVG(commands, view_box=(0, 0, 1, 1), file=path)
-        svg.relative = True
         return svg
     
     def mulsize(self, x):
@@ -179,6 +173,13 @@ class SVG:
             for v in range(1, len(command)):
                 command[v] *= x
         self.view_box = (0, 0, self.view_box[2] * x, self.view_box[3] * x) 
+
+    def stretch(self, x):
+        for command in self.commands:
+            for v in range(1, len(command), 2):
+                command[v] *= x
+        self.view_box = (0, 0, self.view_box[2], self.view_box[3] * x)
+        self.normalize()
 
     def prepare(self):
         self.simplify()
