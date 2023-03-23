@@ -33,6 +33,7 @@ OUT_PATH_ENCODED_TEST = OUT_PATH_ENCODED / 'test'
 OUT_PATH_ENCODED_TRAIN = OUT_PATH_ENCODED / 'train'
 
 GLYPH_FILTER = list(map(chr, range(ord('a'), ord('z') + 1))) + \
+               list(map(chr, range(ord('A'), ord('Z') + 1))) + \
                ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine']
 
 
@@ -90,7 +91,6 @@ def _get_blacklist() -> set[str]:
 def _ttf_to_svg(file, out_dir_suffix) -> Optional[Path]:
     """
     Распаковывает шрифт в набор svg файлов.
-    На второй запуск проверяет, что все получилось, и если нет, пробует починить.
     :param file: Путь до файла шрифта (.ttf, .otf)
     :param out_dir_suffix: суффикс для папки распаковки. Имя шрифта
     :return: Path до папки с svg, если удалось распаковать, None иначе
@@ -106,9 +106,6 @@ def _ttf_to_svg(file, out_dir_suffix) -> Optional[Path]:
             shutil.rmtree(out)
             return None
         return out
-    elif (out / '_moreSVGs_').exists():
-        shutil.rmtree(out)
-        return _ttf_to_svg(file, out_dir_suffix)
     return None
 
 
@@ -120,9 +117,10 @@ def _ttf_dir_to_svg(directory: Path, filters=None, size=None) -> None:
     :param size: Количество шрифтов, верхняя граница.
     :return:
     """
+    print('Converting fonts to svg...')
     filters = filters or GLYPH_FILTER
 
-    items = list(directory.rglob('*.ttf'))
+    items = list(directory.rglob('*.otf')) + list(directory.rglob('*.ttf'))
 
     blacklist = _get_blacklist()
     clear_items = []
@@ -147,7 +145,7 @@ def _ttf_dir_to_svg(directory: Path, filters=None, size=None) -> None:
                     svg.dump_to_file()
                 except Exception:
                     item.unlink(True)
-    print()
+    print('Converted')
 
 
 def _fonts_filter(font_directory: Path, filters=None) -> List[Path]:
@@ -165,11 +163,7 @@ def _fonts_filter(font_directory: Path, filters=None) -> List[Path]:
         if str(file.name) not in filter_svg:
             file.unlink()
         else:
-            matched.append(font_directory / file.name)
-            file.rename(font_directory / file.name)
-    for d in font_directory.iterdir():
-        if d.is_dir():
-            shutil.rmtree(d)
+            matched.append(file)
     return matched
 
 
@@ -193,8 +187,8 @@ def load_data(size=None) -> None:
     """
     half_size = size // 2 if size else None
     _download()
-    _ttf_dir_to_svg(OUT_PATH_ROOT / 'dafonts-free-v1/fonts', size=half_size)
     _clone()
+    _ttf_dir_to_svg(OUT_PATH_ROOT / 'dafonts-free-v1/fonts', size=half_size)
     _ttf_dir_to_svg(OUT_PATH_GGL, size=half_size)
 
 
@@ -217,6 +211,8 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
             labels_train.append((_font_name, _letter, _out_path))
 
     def get_save_path(_is_test: bool, _font_name: str, _letter: str) -> Path:
+        if _letter.isupper():
+            _letter = f'({_letter})'
         return (OUT_PATH_ENCODED_TEST if is_test else OUT_PATH_ENCODED_TRAIN) / _font_name / f'{_letter}.npy'
 
     def process_svg(_svg: SVG, _out_path, _is_test, _font_name, _letter) -> bool:
@@ -246,18 +242,20 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
                     _svg=svg_copy, _out_path=aug_out_path, _is_test=_is_test, _font_name=aug_font_name, _letter=_letter
             )
 
+    print('Encoding...')
     if OUT_PATH_ENCODED.exists():
         print('Data already exists')
         return
 
+    OUT_PATH_ENCODED.mkdir(parents=True, exist_ok=True)
     labels_test = []
     labels_train = []
-    size = size or len(list(_get_font_paths()))
+    size = min(size or 1e10, len(list(_get_font_paths())))
     for path in tqdm(islice(_get_font_paths(), size), total=size):
         font_name = path.stem
         is_test = random.uniform(0, 1) < test_size
 
-        for glif_path in path.iterdir():
+        for glif_path in path.rglob('*.svg'):
             letter = glif_path.stem
 
             out_path = get_save_path(_is_test=is_test, _font_name=font_name, _letter=letter)
@@ -270,6 +268,7 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
     labels_train_df = pd.DataFrame(data=labels_train, columns=['font', 'letter', 'path'])
     labels_test_df.to_csv(OUT_PATH_ENCODED / 'test.csv')
     labels_train_df.to_csv(OUT_PATH_ENCODED / 'train.csv')
+    print('Encoded')
 
 
 class FontsDataset(Dataset):
@@ -277,7 +276,15 @@ class FontsDataset(Dataset):
         if download and not OUT_PATH_ENCODED.exists():
             load_data(size=download_size)
             encode_data(size=download_size)
-        self.info = pd.read_csv(OUT_PATH_ENCODED / ('test.csv' if test else 'train.csv'))
+        file_name = 'test' if test else 'train'
+        self.info = pd.read_csv(OUT_PATH_ENCODED / f'{file_name}.csv')
+        if (OUT_PATH_ENCODED / f'{file_name}.npy').exists():
+            self.data = np.load(OUT_PATH_ENCODED / f'{file_name}.npy')
+        else:
+            self.data = np.zeros((len(self.info), 80, 11), dtype=np.float32)
+            for i in tqdm(range(len(self.info))):
+                self.data[i] = np.load(self.info.iloc[i, 3])
+            np.save(OUT_PATH_ENCODED / f'{file_name}.npy', self.data)
 
     def __len__(self):
         return len(self.info)
@@ -285,5 +292,6 @@ class FontsDataset(Dataset):
     def __getitem__(self, idx) -> tuple[np.ndarray, str, str]:
         font_name = self.info.iloc[idx, 1]
         letter = self.info.iloc[idx, 2]
-        data = np.load(self.info.iloc[idx, 3])
+        # data = np.load(self.info.iloc[idx, 3])
+        data = self.data[idx]
         return data, letter, font_name
