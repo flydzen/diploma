@@ -26,7 +26,7 @@ GGL_FONTS_GIT = 'https://github.com/google/fonts.git'
 OUT_PATH_ROOT = (cur.parent if (cur := Path('.').absolute()).parent == 'utils' else cur) / 'data'
 OUT_PATH_ZIP = OUT_PATH_ROOT / 'fonts.zip'
 OUT_PATH_GGL = OUT_PATH_ROOT / 'ggl'
-OUT_PATH_PROCESSED = OUT_PATH_ROOT / 'svg'
+OUT_PATH_PROCESSED = OUT_PATH_ROOT.parent.parent / 'diploma' / 'data' / 'svg'
 OUT_PATH_ENCODED = OUT_PATH_ROOT / 'encoded'
 
 OUT_PATH_ENCODED_TEST = OUT_PATH_ENCODED / 'test'
@@ -172,7 +172,7 @@ def _get_font_paths() -> Iterator[Path]:
     Ищет папки с svg файлами = шрифты
     :return: Итератор путей до папок
     """
-    data_dir = Path('data/svg')
+    data_dir = OUT_PATH_PROCESSED
     if data_dir.exists():
         fonts = list(data_dir.iterdir())
         for font in fonts:
@@ -194,7 +194,7 @@ def load_data(size=None) -> None:
 
 def encode_data(size=None, test_size: float = 0.1, augment=True):
     """
-    Берет готовые svg и кодирует их для создания датасета. Также создает аугментацию
+    Берет готовые svg и кодирует их для создания датасета. Также создает аугментацию.
     В OUT_PATH_ENCODED / test.svg и OUT_PATH_ENCODED / train.svg лежат документы с указанием
      пути файла с соответствующими лейблом и шрифтом.
     То, куда указывает путь - numpy массив с закодированной буквой.
@@ -243,9 +243,9 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
             )
 
     print('Encoding...')
-    if OUT_PATH_ENCODED.exists():
-        print('Data already exists')
-        return
+    # if OUT_PATH_ENCODED.exists():
+    #     print('Data already exists')
+    #     return
 
     OUT_PATH_ENCODED.mkdir(parents=True, exist_ok=True)
     labels_test = []
@@ -253,14 +253,18 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
     size = min(size or 1e10, len(list(_get_font_paths())))
     for path in tqdm(islice(_get_font_paths(), size), total=size):
         font_name = path.stem
-        is_test = random.uniform(0, 1) < test_size
+        is_test = hash(font_name) % 1000 < test_size * 1000
 
         for glif_path in path.rglob('*.svg'):
             letter = glif_path.stem
 
             out_path = get_save_path(_is_test=is_test, _font_name=font_name, _letter=letter)
+            if out_path.exists():
+                continue
 
             svg = SVG.load(glif_path)
+            if len(svg.commands) > SVG.ENCODE_HEIGHT:
+                continue
             if process_svg(_svg=svg, _out_path=out_path, _is_test=is_test, _font_name=font_name, _letter=letter):
                 do_augment(_is_test=is_test, _font_name=font_name, _letter=letter, original=svg)
 
@@ -274,14 +278,14 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
 class FontsDataset(Dataset):
     def __init__(self, test=False, download=False, download_size=None):
         if download and not OUT_PATH_ENCODED.exists():
-            load_data(size=download_size)
+            # load_data(size=download_size)
             encode_data(size=download_size)
         file_name = 'test' if test else 'train'
         self.info = pd.read_csv(OUT_PATH_ENCODED / f'{file_name}.csv')
         if (OUT_PATH_ENCODED / f'{file_name}.npy').exists():
             self.data = np.load(OUT_PATH_ENCODED / f'{file_name}.npy')
         else:
-            self.data = np.zeros((len(self.info), 80, 11), dtype=np.float32)
+            self.data = np.zeros((len(self.info), SVG.ENCODE_HEIGHT, SVG.ENCODE_WIDTH), dtype=np.float32)
             for i in tqdm(range(len(self.info))):
                 self.data[i] = np.load(self.info.iloc[i, 3])
             np.save(OUT_PATH_ENCODED / f'{file_name}.npy', self.data)

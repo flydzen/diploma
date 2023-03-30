@@ -10,7 +10,7 @@ class EncodeError(Exception):
 
 class SVG:
     ONE_HOT_LEN = 5
-    ENCODE_HEIGHT = 80
+    ENCODE_HEIGHT = 32
     ENCODE_WIDTH = ONE_HOT_LEN + 6
     ENCODE_SHAPE = (ENCODE_WIDTH, ENCODE_HEIGHT)
 
