@@ -277,18 +277,20 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
 
 class FontsDataset(Dataset):
     def __init__(self, test=False, download=False, download_size=None):
-        if download and not OUT_PATH_ENCODED.exists():
-            # load_data(size=download_size)
+        data_csv = OUT_PATH_ENCODED / f'{file_name}.csv'
+        data_npy = OUT_PATH_ENCODED / f'{file_name}.npy'
+        if download and not OUT_PATH_ENCODED.exists() and not data_csv.exists() and not data_npy.exists():
+            load_data(size=download_size)
             encode_data(size=download_size)
         file_name = 'test' if test else 'train'
-        self.info = pd.read_csv(OUT_PATH_ENCODED / f'{file_name}.csv')
-        if (OUT_PATH_ENCODED / f'{file_name}.npy').exists():
-            self.data = np.load(OUT_PATH_ENCODED / f'{file_name}.npy')
+        self.info = pd.read_csv(data_csv)
+        if data_npy.exists():
+            self.data = np.load(data_npy)
         else:
             self.data = np.zeros((len(self.info), SVG.ENCODE_HEIGHT, SVG.ENCODE_WIDTH), dtype=np.float32)
             for i in tqdm(range(len(self.info))):
                 self.data[i] = np.load(self.info.iloc[i, 3])
-            np.save(OUT_PATH_ENCODED / f'{file_name}.npy', self.data)
+            np.save(data_npy, self.data)
 
     def __len__(self):
         return len(self.info)
