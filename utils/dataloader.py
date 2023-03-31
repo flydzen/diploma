@@ -1,4 +1,4 @@
-from typing import Optional, Iterator
+from typing import Optional, Iterator, Set, Tuple
 from itertools import islice
 
 import torch
@@ -79,7 +79,7 @@ def _clone() -> None:
         print('Cloned')
 
 
-def _get_blacklist() -> set[str]:
+def _get_blacklist() -> Set[str]:
     """
     Возвращает множество плохих шрифтов
     """
@@ -277,12 +277,13 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
 
 class FontsDataset(Dataset):
     def __init__(self, test=False, download=False, download_size=None):
+        file_name = 'test' if test else 'train'
         data_csv = OUT_PATH_ENCODED / f'{file_name}.csv'
         data_npy = OUT_PATH_ENCODED / f'{file_name}.npy'
+        
         if download and not OUT_PATH_ENCODED.exists() and not data_csv.exists() and not data_npy.exists():
             load_data(size=download_size)
             encode_data(size=download_size)
-        file_name = 'test' if test else 'train'
         self.info = pd.read_csv(data_csv)
         if data_npy.exists():
             self.data = np.load(data_npy)
@@ -295,7 +296,7 @@ class FontsDataset(Dataset):
     def __len__(self):
         return len(self.info)
 
-    def __getitem__(self, idx) -> tuple[np.ndarray, str, str]:
+    def __getitem__(self, idx) -> Tuple[np.ndarray, str, str]:
         font_name = self.info.iloc[idx, 1]
         letter = self.info.iloc[idx, 2]
         # data = np.load(self.info.iloc[idx, 3])
