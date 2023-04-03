@@ -1,6 +1,7 @@
 {
   "_class_name": "UNet2DModel",
   "_diffusers_version": "0.14.0",
+  "_name_or_path": "models/DiffusionCond/612_4_mse/unet",
   "act_fn": "silu",
   "add_attention": true,
   "attention_head_dim": 8,
