@@ -10,4 +10,4 @@ utils/svg_old.py
 .ipynb_checkpoints/
 __pycache__/
 imgs/
-models_ae/
+models/*/temp

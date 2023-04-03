@@ -1,15 +1,26 @@
+numpy==1.21.0
 wget==3.2
 fonttools==4.38.0
 opentypesvg==1.1.5
 xmltodict==0.13.0
-numpy==1.24.2
 matplotlib==3.7.0
 pandas==1.5.3
-tqdm==4.64.1
-scikit-learn==1.2.1
+tqdm==4.54.1
+scikit-learn==1.2.2
 torchsummary==1.5.1
-denoising_diffusion_pytorch==1.2.2
 optuna==3.1.0
 cairosvg
+umap-learn>=0.5.3
+GitPython>=3.1.31
+
+transformers
+requests<=2.25.1
+charset-normalizer<3.0,>=2.0
+urllib3<1.25,>=1.21.1
+idna<2.9,>=2.5
+diffusers[torch]
+diffusers[training]
+
+
 # torch==1.13.1
 # torchvision==0.14.1
