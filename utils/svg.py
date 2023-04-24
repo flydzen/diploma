@@ -73,6 +73,37 @@ class SVG:
                 command[i] = v / scale
         self.view_box = (0, 0, 1, 1)
 
+    def rearrange(self):
+        components = []
+        last = -1
+        for i, line in enumerate(self.commands):
+            if line[0] == 'Z':
+                components.append(self.commands[last + 1: i + 1])
+                last = i
+
+        components = [self.rearrange_component(component) for component in components]
+        components.sort(key=lambda x: x[0][-2:])
+        self.commands = list(itertools.chain(*components))
+
+    @staticmethod
+    def rearrange_component(component):
+        main_commands = component[1:-1]
+
+        # команда Z фиктивна. Завершаем путь в ту же стартовую точку вручную, если не завершен
+        if component[0][-2:] != main_commands[-1][-2:]:
+            main_commands.append(['L', *component[0][-2:]])
+
+        points = [c[-2:] for c in main_commands]
+        start_point = min(points)
+        start_index = points.index(start_point)
+        rearranged_commands = [
+            ['M', *start_point],
+            *main_commands[start_index + 1:],
+            *main_commands[:start_index + 1],
+            ['Z'],
+        ]
+        return rearranged_commands
+
     @classmethod
     def load(cls, file: Path):
         with open(str(file), 'r') as f:
@@ -183,4 +214,5 @@ class SVG:
 
     def prepare(self):
         self.simplify()
+        self.rearrange()
         self.normalize()

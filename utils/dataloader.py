@@ -228,19 +228,19 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
             _is_test: bool,
             _font_name: str,
             _letter: str,
-            original: SVG
+            original: SVG,
+            w: float,  # 0.8, 1.2
     ):
         if not augment:
             return
-        for w in (0.85, 1.15):
-            aug_font_name = f'{_font_name}_augS{str(w).replace(".", "x")}'
-            aug_out_path = get_save_path(_is_test=_is_test, _font_name=aug_font_name, _letter=_letter)
+        aug_font_name = f'{_font_name}_augS{str(w).replace(".", "x")}'
+        aug_out_path = get_save_path(_is_test=_is_test, _font_name=aug_font_name, _letter=_letter)
 
-            svg_copy = deepcopy(original)
-            svg_copy.stretch(w)
-            process_svg(
-                    _svg=svg_copy, _out_path=aug_out_path, _is_test=_is_test, _font_name=aug_font_name, _letter=_letter
-            )
+        svg_copy = deepcopy(original)
+        svg_copy.stretch(w)
+        process_svg(
+            _svg=svg_copy, _out_path=aug_out_path, _is_test=_is_test, _font_name=aug_font_name, _letter=_letter
+        )
 
     print('Encoding...')
     # if OUT_PATH_ENCODED.exists():
@@ -255,24 +255,39 @@ def encode_data(size=None, test_size: float = 0.1, augment=True):
         font_name = path.stem
         is_test = hash(font_name) % 1000 < test_size * 1000
 
-        for glif_path in path.rglob('*.svg'):
-            letter = glif_path.stem
+        to_aug = []
+        for glyf_path in path.rglob('*.svg'):
+            letter = glyf_path.stem
 
             out_path = get_save_path(_is_test=is_test, _font_name=font_name, _letter=letter)
             if out_path.exists():
                 continue
 
-            svg = SVG.load(glif_path)
+            svg = SVG.load(glyf_path)
             if len(svg.commands) > SVG.ENCODE_HEIGHT:
                 continue
             if process_svg(_svg=svg, _out_path=out_path, _is_test=is_test, _font_name=font_name, _letter=letter):
-                do_augment(_is_test=is_test, _font_name=font_name, _letter=letter, original=svg)
+                to_aug.append(dict(_is_test=is_test, _font_name=font_name, _letter=letter, original=svg))
+        for kwargs in to_aug:
+            do_augment(**kwargs, w=0.8)
+        for kwargs in to_aug:
+            do_augment(**kwargs, w=1.2)
 
     labels_test_df = pd.DataFrame(data=labels_test, columns=['font', 'letter', 'path'])
     labels_train_df = pd.DataFrame(data=labels_train, columns=['font', 'letter', 'path'])
     labels_test_df.to_csv(OUT_PATH_ENCODED / 'test.csv')
     labels_train_df.to_csv(OUT_PATH_ENCODED / 'train.csv')
     print('Encoded')
+    
+    
+def collate_fn(items):
+    dts, lbls, f_names = [], [], []
+    for dt, lbl, f_name in items:
+        dts.append(dt)
+        lbls.append(lbl)
+        f_names.append(f_name)
+    
+    return dts, lbls, f_names
 
 
 class FontsDataset(Dataset):
@@ -281,24 +296,35 @@ class FontsDataset(Dataset):
         data_csv = OUT_PATH_ENCODED / f'{file_name}.csv'
         data_npy = OUT_PATH_ENCODED / f'{file_name}.npy'
         
-        if download and not OUT_PATH_ENCODED.exists() and not data_csv.exists() and not data_npy.exists():
+        if download and not data_csv.exists() and not data_npy.exists():
             load_data(size=download_size)
             encode_data(size=download_size)
-        self.info = pd.read_csv(data_csv)
+        info = pd.read_csv(data_csv)
         if data_npy.exists():
             self.data = np.load(data_npy)
         else:
-            self.data = np.zeros((len(self.info), SVG.ENCODE_HEIGHT, SVG.ENCODE_WIDTH), dtype=np.float32)
-            for i in tqdm(range(len(self.info))):
-                self.data[i] = np.load(self.info.iloc[i, 3])
+            self.data = np.zeros((len(info), SVG.ENCODE_HEIGHT, SVG.ENCODE_WIDTH), dtype=np.float32)
+            for i in tqdm(range(len(info))):
+                self.data[i] = np.load(info.iloc[i, 3])
             np.save(data_npy, self.data)
+            
+        self.font_names = []
+        self.glyphs = []
+        self.letters = []
+        
+        for index, row in tqdm(info.iterrows(), total=len(info), desc='Grouping by font'):
+            index: int = index
+            if not self.font_names or row['font'] != self.font_names[-1]:
+                if index != 0:
+                    self.glyphs.append(self.data[index - len(self.letters[-1]):index])
+                self.font_names.append(row['font'])
+                self.letters.append([])
 
+            self.letters[-1].append(row['letter'])
+        self.glyphs.append(self.data[index - len(self.letters[-1]):index])
+        
     def __len__(self):
-        return len(self.info)
+        return len(self.font_names)
 
-    def __getitem__(self, idx) -> Tuple[np.ndarray, str, str]:
-        font_name = self.info.iloc[idx, 1]
-        letter = self.info.iloc[idx, 2]
-        # data = np.load(self.info.iloc[idx, 3])
-        data = self.data[idx]
-        return data, letter, font_name
+    def __getitem__(self, idx) -> Tuple[List[np.ndarray], List[str], List[str]]:
+        return self.glyphs[idx], self.letters[idx], [self.font_names[idx]] * len(self.letters[idx])

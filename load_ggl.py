@@ -6,12 +6,14 @@ import time
 import numpy as np
 from torch.utils.data import DataLoader
 
-# load_data()
-encode_data()
+# load_data(10)
+# encode_data()
 
-# dataset = FontsDataset(test=True, download=True, download_size=40)
-
-# dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=0)
+dataset = FontsDataset(test=True, download=True)
+dataset2 = FontsDataset(test=False)
+#
+print(dataset[55][1])
+dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=0)
 #
 # print(np.load('data/encoded/train/!the_black_bloc-bold/a.npy').dtype)
 # print(dataset[0][0].dtype)
