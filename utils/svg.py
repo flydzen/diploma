@@ -1,4 +1,5 @@
 import itertools
+import math
 from pathlib import Path
 import numpy as np
 import xmltodict
@@ -14,10 +15,12 @@ class SVG:
     ENCODE_WIDTH = ONE_HOT_LEN + 6
     ENCODE_SHAPE = (ENCODE_WIDTH, ENCODE_HEIGHT)
 
-    def __init__(self, commands: list, view_box: tuple = None, file: Path = None):
+    def __init__(self, commands: list, view_box: tuple = None, file: Path = None, height=None, width=None):
         self.file = file
         self.commands = commands
         self.view_box = view_box or (0, 0, 1, 1)
+        self.h = height or 256
+        self.w = width or 256
 
     def simplify(self):
         min_x, min_y, max_x, max_y = float('inf'), float('inf'), float('-inf'), float('-inf')
@@ -109,6 +112,8 @@ class SVG:
         with open(str(file), 'r') as f:
             doc = xmltodict.parse(f.read())
             path = doc['svg']['path']['@d']
+            height = doc['svg']['@height']
+            width = doc['svg']['@width']
             res = list(
                 filter(
                     lambda y: y != '',
@@ -127,7 +132,7 @@ class SVG:
                     command = None
             if command is not None:
                 commands.append([command])
-        return SVG(commands, file=file)
+        return SVG(commands, file=file, height=height, width=width)
 
     def dump(self):
         view_box = ' '.join(map(str, self.view_box)) if self.view_box else (0, 0, 1, 1)
@@ -137,7 +142,8 @@ class SVG:
                 [str(command[0])] + [np.format_float_positional(i, precision=7, trim='-') for i in command[1:]]
             )
         path = '\n'.join([' '.join(command) for command in commands])
-        return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}">\n' \
+        return f'<svg xmlns="http://www.w3.org/2000/svg" ' \
+               f'viewBox="{view_box}" height="{self.h}px" width="{self.w}px">\n' \
                f'    <path fill="#000000" d="\n' \
                f'{path}\n' \
                f'    "/>\n' \
@@ -216,3 +222,58 @@ class SVG:
         self.simplify()
         self.rearrange()
         self.normalize()
+
+    def refine(self):
+        MIN_NORM = 0.005
+        angle_limit = math.radians(10)
+
+        p_c, p_args, p_out = None, None, None
+        to_remove = []
+        repeat = True
+        while repeat:
+            repeat = False
+            for i, (c, *args) in enumerate(self.commands):
+                args = np.array(args)
+                if p_c is None:
+                    p_c, p_args = c, args
+                    continue
+                nxt = self.commands[(i + 1) % len(self.commands)]
+                if c == 'Z':
+                    nxt[-2] = p_args[-1]
+                    nxt[-1] = p_args[-2]
+                    continue
+                norm = np.linalg.norm(args[-2:] - p_args[-2:])
+                if norm < MIN_NORM:
+                    to_remove.append(i)
+                    continue
+
+                if c == 'L' or c == 'M':
+                    if abs(args[-2] / args[-1]) < 0.01:
+                        args[-2] = 0
+                    if abs(args[-1] / args[-2]) < 0.01:
+                        args[-1] = 0
+                    in_vec = args[-2:] - p_args[-2:]
+                    in_vec /= np.linalg.norm(in_vec)
+                    out_vec = in_vec
+                    out_vec /= np.linalg.norm(out_vec)
+
+                    dot_product = np.dot(p_out, in_vec)
+                    angle = np.arccos(dot_product)
+
+                else:
+                    in_vec = args[:2] - p_args[-2:]
+                    in_norm = np.linalg.norm(in_vec)
+                    in_vec /= in_norm
+                    out_vec = (args[-2:] - args[-4:-2])
+                    out_vec /= np.linalg.norm(out_vec)
+
+                    dot_product = np.dot(p_out, in_vec)
+                    angle = np.arccos(dot_product)
+                    if np.abs(angle) < 10:
+                        args[:2] = p_args[-2:] + p_out * in_norm
+
+                p_c, p_args, p_out = c, args, out_vec
+
+            for i in reversed(to_remove):
+                self.commands.pop(i)
+                repeat = True
